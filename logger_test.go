@@ -49,9 +49,10 @@ func TestLogger(t *testing.T) {
 			Time("time", testDate),
 			Err(fmt.Errorf("test error")),
 			Json("json", obj),
+			Interface("obj", obj),
 		)
 
-		assert.Equal(tt, `2022-08-10T21:29:59Z TRC hello error="test error" float32=6.1E+00 float64=7.2E+00 int=1 int16=3 int32=4 int64=5 int8=2 json="{\"A\":\"B\"}" string=s time="2022-08-10T21:29:59.000000004Z"
+		assert.Equal(tt, `2022-08-10T21:29:59Z TRC hello error="test error" float32=6.1E+00 float64=7.2E+00 int=1 int16=3 int32=4 int64=5 int8=2 json="{\"A\":\"B\"}" obj="{B}" string=s time="2022-08-10T21:29:59.000000004Z"
 `, buf.String())
 		buf.Reset()
 	})

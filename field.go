@@ -64,3 +64,6 @@ func Err(err error) Field {
 func Json(key string, val interface{}) Field {
 	return Field{tp: jsonType, key: key, value: val}
 }
+func Interface(key string, val interface{}) Field {
+	return Field{tp: interfaceType, key: key, value: val}
+}
