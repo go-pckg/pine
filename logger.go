@@ -126,28 +126,56 @@ func (l *Logger) Trace(msg string, fields ...Field) {
 	l.log(TraceLevel, msg, nil, fields)
 }
 
+func (l *Logger) Tracef(msg string, a ...interface{}) {
+	l.log(TraceLevel, msg, a, nil)
+}
+
 func (l *Logger) Debug(msg string, fields ...Field) {
 	l.log(DebugLevel, msg, nil, fields)
+}
+
+func (l *Logger) Debugf(msg string, a ...interface{}) {
+	l.log(DebugLevel, msg, a, nil)
 }
 
 func (l *Logger) Info(msg string, fields ...Field) {
 	l.log(InfoLevel, msg, nil, fields)
 }
 
+func (l *Logger) Infof(msg string, a ...interface{}) {
+	l.log(InfoLevel, msg, a, nil)
+}
+
 func (l *Logger) Warn(msg string, fields ...Field) {
 	l.log(WarnLevel, msg, nil, fields)
+}
+
+func (l *Logger) Warnf(msg string, a ...interface{}) {
+	l.log(WarnLevel, msg, a, nil)
 }
 
 func (l *Logger) Error(msg string, fields ...Field) {
 	l.log(ErrorLevel, msg, nil, fields)
 }
 
+func (l *Logger) Errorf(msg string, a ...interface{}) {
+	l.log(ErrorLevel, msg, a, nil)
+}
+
 func (l *Logger) Panic(msg string, fields ...Field) {
 	l.log(PanicLevel, msg, nil, fields)
 }
 
+func (l *Logger) Panicf(msg string, a ...interface{}) {
+	l.log(PanicLevel, msg, a, nil)
+}
+
 func (l *Logger) Fatal(msg string, fields ...Field) {
 	l.log(FatalLevel, msg, nil, fields)
+}
+
+func (l *Logger) Fatalf(msg string, a ...interface{}) {
+	l.log(FatalLevel, msg, a, nil)
 }
 
 func (l *Logger) WithFields(fields ...Field) *Entry {

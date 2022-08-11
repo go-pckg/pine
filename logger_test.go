@@ -158,6 +158,15 @@ func TestLogger_Error(t *testing.T) {
 	assert.Equal(t, "2022-08-10T21:29:59Z ERR hello error=test\n", buf.String())
 }
 
+func TestLogger_Format(t *testing.T) {
+	buf := &bytes.Buffer{}
+	lgr := New(Output(buf), WithClock(testClock{}))
+
+	lgr.Debugf("hello %v", 1)
+	assert.Equal(t, "2022-08-10T21:29:59Z DBG hello 1\n", buf.String())
+	buf.Reset()
+}
+
 func TestLogger_Race(t *testing.T) {
 	buf := &bytes.Buffer{}
 	lgr := New(Output(buf), ErrOutput(os.Stderr), WithClock(testClock{}))
