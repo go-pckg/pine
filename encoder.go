@@ -67,7 +67,7 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 	}
 
 	var entities []interface{}
-	entities = append(entities, colorize(ent.time.Format(time.RFC3339), colorDarkGray, l.UseColors))
+	entities = append(entities, colorize(ent.time.Format(time.RFC3339Nano), colorDarkGray, l.UseColors))
 	entities = append(entities, lvl)
 	if l.ReportCaller && ent.caller != nil {
 		entities = append(entities, fmt.Sprintf("%s:%v", ent.caller.File, ent.caller.Line))
