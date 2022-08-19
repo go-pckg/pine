@@ -241,3 +241,44 @@ func TestLogger_Race(t *testing.T) {
 
 	assert.Equal(t, workers*cycles, counter)
 }
+
+func TestLogger_RaceMultiple(t *testing.T) {
+	buf := &bytes.Buffer{}
+	lgr1 := New(Output(buf), ErrOutput(os.Stderr), WithClock(newTestClock()), Fields(Int("i", 1)))
+	lgr2 := lgr1.With(Int("i", 1))
+	lgr3 := lgr2.With(Int("i", 1))
+
+	loggers := []*Logger{lgr1, lgr2, lgr3}
+
+	workers := 3
+	cycles := 1000
+
+	wg := sync.WaitGroup{}
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			lgr := loggers[i]
+			for j := 0; j < cycles; j++ {
+				lgr.Info("hello")
+			}
+			wg.Done()
+		}(i)
+	}
+	wg.Wait()
+
+	counter := 0
+	for {
+		line, err := buf.ReadString('\n')
+		if err != nil {
+			if err == io.EOF {
+				break
+			} else {
+				t.Fatal(err)
+			}
+		}
+		counter++
+		require.Equal(t, "2022-08-10T21:29:59.123Z INF hello i=1\n", line)
+	}
+
+	assert.Equal(t, workers*cycles, counter)
+}
