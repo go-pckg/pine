@@ -73,6 +73,12 @@ func TestLogger(t *testing.T) {
 		assert.Equal(tt, "2022-08-10T21:29:59.123Z INF hello i=1\n", buf.String())
 		buf.Reset()
 	})
+
+	t.Run("nil error", func(tt *testing.T) {
+		lgr.Info("hello", Err(nil))
+		assert.Equal(tt, "2022-08-10T21:29:59.123Z INF hello\n", buf.String())
+		buf.Reset()
+	})
 }
 
 func TestLogger_DefaultFields(t *testing.T) {

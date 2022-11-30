@@ -155,6 +155,9 @@ func (l consoleEncoder) appendField(b *bytes.Buffer, field Field) error {
 	case interfaceType:
 		value = fmt.Sprint(field.value)
 	case errorType:
+		if field.err == nil {
+			return nil
+		}
 		keyColour = colorRed
 		value = field.err.Error()
 	default:
