@@ -47,7 +47,7 @@ func New(options ...Option) *Logger {
 		out:             os.Stderr,
 		errOut:          os.Stderr,
 		clock:           DefaultClock,
-		level:           NewLevelValue(DebugLevel),
+		level:           NewLevelValue(readEnvOrDefaultLevel(DebugLevel)),
 		stackTraceLevel: NewLevelValue(ErrorLevel),
 		fields:          map[string]Field{},
 	}
@@ -260,4 +260,17 @@ func sprintf(format string, a []interface{}) string {
 	}
 
 	return fmt.Sprint(a...)
+}
+
+func readEnvOrDefaultLevel(defaultLevel Level) Level {
+	level := os.Getenv("PINE_LEVEL")
+	if level == "" {
+		return defaultLevel
+	}
+
+	lvl, err := ParseLevel(level)
+	if err != nil {
+		return defaultLevel
+	}
+	return lvl
 }

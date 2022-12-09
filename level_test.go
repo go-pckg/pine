@@ -1,6 +1,7 @@
 package pine
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -21,4 +22,10 @@ func TestLevelParse(t *testing.T) {
 	check("debug", DebugLevel)
 	check("trace", TraceLevel)
 	check("", DisabledLevel)
+}
+
+func TestEnvLevel(t *testing.T) {
+	os.Setenv("PINE_LEVEL", "trace")
+	lgr := New()
+	assert.Equal(t, TraceLevel, *lgr.level.Value)
 }
