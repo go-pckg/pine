@@ -139,6 +139,12 @@ func (l consoleEncoder) appendField(b *bytes.Buffer, field Field) error {
 		value = strconv.FormatInt(field.int64, 10)
 	case int64Type:
 		value = strconv.FormatInt(field.int64, 10)
+	case boolType:
+		bv := false
+		if field.int64 == 1 {
+			bv = true
+		}
+		value = strconv.FormatBool(bv)
 	case float32Type:
 		value = strconv.FormatFloat(field.float64, 'E', -1, 32)
 	case float64Type:

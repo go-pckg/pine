@@ -17,6 +17,7 @@ const (
 	float64Type
 	timeType
 	errorType
+	boolType
 )
 
 type Field struct {
@@ -49,6 +50,13 @@ func Float32(key string, val float32) Field {
 }
 func Float64(key string, val float64) Field {
 	return Field{tp: float64Type, key: key, float64: val}
+}
+func Bool(key string, val bool) Field {
+	var v int64
+	if val {
+		v = 1
+	}
+	return Field{tp: boolType, key: key, int64: v}
 }
 func String(key string, val string) Field {
 	return Field{tp: stringType, key: key, string: val}
