@@ -25,7 +25,7 @@ func NewDevelopment(options ...Option) *Logger {
 	cfg := config{
 		encoderConfig: encoderConfig{
 			development: true,
-			UseColors:   readEnvOrDefaultUseColors(false),
+			UseColors:   true,
 		},
 		out:             os.Stderr,
 		errOut:          os.Stderr,
@@ -44,7 +44,9 @@ func NewDevelopment(options ...Option) *Logger {
 
 func New(options ...Option) *Logger {
 	cfg := config{
-		encoderConfig:   encoderConfig{},
+		encoderConfig: encoderConfig{
+			UseColors: readEnvOrDefaultUseColors(false),
+		},
 		out:             os.Stderr,
 		errOut:          os.Stderr,
 		clock:           DefaultClock,
