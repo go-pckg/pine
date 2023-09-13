@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -24,7 +25,7 @@ func NewDevelopment(options ...Option) *Logger {
 	cfg := config{
 		encoderConfig: encoderConfig{
 			development: true,
-			UseColors:   true,
+			UseColors:   readEnvOrDefaultUseColors(false),
 		},
 		out:             os.Stderr,
 		errOut:          os.Stderr,
@@ -273,4 +274,16 @@ func readEnvOrDefaultLevel(defaultLevel Level) Level {
 		return defaultLevel
 	}
 	return lvl
+}
+
+func readEnvOrDefaultUseColors(defaultUseColors bool) bool {
+	useColors := os.Getenv("PINE_COLORS")
+	if useColors == "" {
+		return defaultUseColors
+	}
+
+	if strings.ToLower(useColors) == "true" {
+		return true
+	}
+	return false
 }
