@@ -4,18 +4,49 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sort"
 	"strconv"
 	"sync"
 	"time"
 
+	"github.com/go-pckg/pine/gelf"
 	"github.com/pkg/errors"
 )
 
-var bufferPool = &sync.Pool{
+var defaultHostname = func() string {
+	hostname, _ := os.Hostname()
+	return hostname
+}
+
+// 1k bytes buffer by default
+var bufPool = sync.Pool{
 	New: func() interface{} {
-		return &bytes.Buffer{}
+		return bytes.NewBuffer(make([]byte, 0, 1024))
 	},
+}
+
+func newBuffer() *bytes.Buffer {
+	b := bufPool.Get().(*bytes.Buffer)
+	if b != nil {
+		b.Reset()
+		return b
+	}
+	return bytes.NewBuffer(nil)
+}
+
+var gelfPool = &sync.Pool{
+	New: func() interface{} {
+		return &gelf.Message{}
+	},
+}
+
+func newGelfMsg() *gelf.Message {
+	m := gelfPool.Get().(*gelf.Message)
+	if m != nil {
+		return m
+	}
+	return &gelf.Message{}
 }
 
 type encoderConfig struct {
@@ -25,7 +56,6 @@ type encoderConfig struct {
 	DisableQuote     bool
 	ReportCaller     bool
 	DisableSorting   bool
-	development      bool
 }
 
 type encoder interface {
@@ -74,11 +104,9 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 	}
 	entities = append(entities, ent.message)
 
-	buf := bufferPool.Get().(*bytes.Buffer)
-
+	buf := newBuffer()
 	defer func() {
-		buf.Reset()
-		bufferPool.Put(buf)
+		bufPool.Put(buf)
 	}()
 
 	for i := range entities {
@@ -109,7 +137,7 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 		}
 	}
 
-	if l.development && ent.stack != nil {
+	if ent.stack != nil {
 		if _, err := buf.WriteString(fmt.Sprintf("%+v", ent.stack)); err != nil {
 			return nil, err
 		}
@@ -123,51 +151,18 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 }
 
 func (l consoleEncoder) appendField(b *bytes.Buffer, field Field) error {
-	var keyColour = colorCyan
-	var value string
+	ok, value, err := getStringValue(field)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
 
+	var keyColour = colorCyan
 	switch field.tp {
-	case stringType:
-		value = field.string
-	case intType:
-		value = strconv.FormatInt(field.int64, 10)
-	case int8Type:
-		value = strconv.FormatInt(field.int64, 10)
-	case int16Type:
-		value = strconv.FormatInt(field.int64, 10)
-	case int32Type:
-		value = strconv.FormatInt(field.int64, 10)
-	case int64Type:
-		value = strconv.FormatInt(field.int64, 10)
-	case boolType:
-		bv := false
-		if field.int64 == 1 {
-			bv = true
-		}
-		value = strconv.FormatBool(bv)
-	case float32Type:
-		value = strconv.FormatFloat(field.float64, 'E', -1, 32)
-	case float64Type:
-		value = strconv.FormatFloat(field.float64, 'E', -1, 64)
-	case timeType:
-		tm := field.value.(time.Time)
-		value = tm.Format(time.RFC3339Nano)
-	case jsonType:
-		bts, err := json.Marshal(field.value)
-		if err != nil {
-			return err
-		}
-		value = string(bts)
-	case interfaceType:
-		value = fmt.Sprint(field.value)
 	case errorType:
-		if field.err == nil {
-			return nil
-		}
 		keyColour = colorRed
-		value = field.err.Error()
-	default:
-		return errors.New("unknown field type")
 	}
 
 	if b.Len() > 0 {
@@ -209,6 +204,74 @@ func (l consoleEncoder) needsQuoting(text string) bool {
 	return false
 }
 
+type gelfEncoder struct {
+}
+
+func newGelfEncoder() gelfEncoder {
+	return gelfEncoder{}
+}
+
+func (l gelfEncoder) clone() encoder {
+	return newGelfEncoder()
+}
+
+func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
+	hostname := defaultHostname()
+	for i := range fields {
+		if fields[i].key == "host" {
+			hostname = fields[i].string
+			break
+		}
+	}
+
+	gelfMsg := newGelfMsg()
+	defer gelfPool.Put(gelfMsg)
+	gelfMsg.Version = "1.1"
+	gelfMsg.Level = gelfLevel(ent.level)
+	gelfMsg.TimeUnix = float64(ent.time.Unix())
+	gelfMsg.Short = ent.message
+	gelfMsg.Full = ""
+	gelfMsg.Host = hostname
+	gelfMsg.Extra = map[string]interface{}{}
+
+	if ent.caller != nil {
+		gelfMsg.Extra["_caller"] = fmt.Sprintf("%s:%v", ent.caller.File, ent.caller.Line)
+		gelfMsg.Extra["_file"] = ent.caller.File
+		gelfMsg.Extra["_line"] = ent.caller.Line
+	}
+
+	if ent.stack != nil {
+		gelfMsg.Extra["_stack"] = fmt.Sprintf("%+v", ent.stack)
+	}
+
+	for i := range fields {
+		if err := l.appendField(gelfMsg.Extra, fields[i]); err != nil {
+			return nil, err
+		}
+	}
+
+	buf := newBuffer()
+	defer bufPool.Put(buf)
+	if err := gelfMsg.MarshalJSONBuf(buf); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (l gelfEncoder) appendField(m map[string]interface{}, field Field) error {
+	ok, value, err := getStringValue(field)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	m["_"+field.key] = value
+
+	return nil
+}
+
 func consoleLevel(lvl Level) string {
 	switch lvl {
 	case TraceLevel:
@@ -228,4 +291,74 @@ func consoleLevel(lvl Level) string {
 	default:
 		return "???"
 	}
+}
+
+func gelfLevel(lvl Level) int32 {
+	switch lvl {
+	case TraceLevel:
+		return 7
+	case DebugLevel:
+		return 7
+	case InfoLevel:
+		return 6
+	case WarnLevel:
+		return 4
+	case ErrorLevel:
+		return 3
+	case PanicLevel:
+		return 2
+	case FatalLevel:
+		return 1
+	default:
+		return 7
+	}
+}
+
+func getStringValue(field Field) (bool, string, error) {
+	var value string
+
+	switch field.tp {
+	case stringType:
+		value = field.string
+	case intType:
+		value = strconv.FormatInt(field.int64, 10)
+	case int8Type:
+		value = strconv.FormatInt(field.int64, 10)
+	case int16Type:
+		value = strconv.FormatInt(field.int64, 10)
+	case int32Type:
+		value = strconv.FormatInt(field.int64, 10)
+	case int64Type:
+		value = strconv.FormatInt(field.int64, 10)
+	case boolType:
+		bv := false
+		if field.int64 == 1 {
+			bv = true
+		}
+		value = strconv.FormatBool(bv)
+	case float32Type:
+		value = strconv.FormatFloat(field.float64, 'E', -1, 32)
+	case float64Type:
+		value = strconv.FormatFloat(field.float64, 'E', -1, 64)
+	case timeType:
+		tm := field.value.(time.Time)
+		value = tm.Format(time.RFC3339Nano)
+	case jsonType:
+		bts, err := json.Marshal(field.value)
+		if err != nil {
+			return false, "", err
+		}
+		value = string(bts)
+	case interfaceType:
+		value = fmt.Sprint(field.value)
+	case errorType:
+		if field.err == nil {
+			return false, "", nil
+		}
+		value = field.err.Error()
+	default:
+		return false, "", errors.New("unknown field type")
+	}
+
+	return true, value, nil
 }

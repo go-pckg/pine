@@ -1,7 +1,6 @@
 package pine
 
 import (
-	"runtime"
 	"sync"
 	"time"
 
@@ -50,7 +49,7 @@ func (e *Entry) Fatalf(msg string, args ...interface{}) {
 }
 
 func (e *Entry) logCaller(skipFrame int) {
-	_, file, line, ok := runtime.Caller(skipFrame)
+	_, file, line, ok := getCaller(skipFrame)
 	if !ok {
 		e.caller = nil
 		return

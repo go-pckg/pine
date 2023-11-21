@@ -1,5 +1,11 @@
 package pine
 
+import "runtime"
+
+var getCaller = func(skip int) (pc uintptr, file string, line int, ok bool) {
+	return runtime.Caller(skip)
+}
+
 type Caller struct {
 	File string
 	Line int

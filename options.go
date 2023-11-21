@@ -1,6 +1,8 @@
 package pine
 
-import "io"
+import (
+	"io"
+)
 
 type Option interface {
 	apply(*config)
@@ -14,69 +16,63 @@ func (f optionFunc) apply(log *config) {
 
 func WithLevel(lvl Level) Option {
 	return optionFunc(func(log *config) {
-		log.level = NewLevelValue(lvl)
+		log.consoleConfig.level = NewLevelValue(lvl)
 	})
 }
 
 func WithLevelValue(lvl *LevelValue) Option {
 	return optionFunc(func(log *config) {
-		log.level = lvl
+		log.consoleConfig.level = lvl
 	})
 }
 
 func Colored(useColors bool) Option {
 	return optionFunc(func(log *config) {
-		log.UseColors = useColors
+		log.consoleConfig.encoderConfig.UseColors = useColors
 	})
 }
 
 func WithColors() Option {
 	return optionFunc(func(log *config) {
-		log.UseColors = true
+		log.consoleConfig.encoderConfig.UseColors = true
 	})
 }
 
 func NoColors() Option {
-	return optionFunc(func(log *config) {
-		log.UseColors = false
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.UseColors = false
 	})
 }
 
 func WithStackTraceLevel(lvl Level) Option {
-	return optionFunc(func(log *config) {
-		log.stackTraceLevel = NewLevelValue(lvl)
+	return optionFunc(func(c *config) {
+		c.stackTraceLevel = NewLevelValue(lvl)
 	})
 }
 
 func ForceQuote() Option {
-	return optionFunc(func(log *config) {
-		log.ForceQuote = true
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.ForceQuote = true
 	})
 }
 
 func QuoteEmptyFields() Option {
-	return optionFunc(func(log *config) {
-		log.QuoteEmptyFields = true
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.QuoteEmptyFields = true
 	})
 }
 
 func NoQuotes() Option {
-	return optionFunc(func(log *config) {
-		log.DisableQuote = true
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.DisableQuote = true
 	})
 }
 
 func Fields(fields ...Field) Option {
-	return optionFunc(func(log *config) {
+	return optionFunc(func(c *config) {
 		for i := range fields {
-			log.fields[fields[i].key] = fields[i]
+			c.fields[fields[i].key] = fields[i]
 		}
-	})
-}
-
-func Development(enabled bool) Option {
-	return optionFunc(func(log *config) {
-		log.development = enabled
 	})
 }
 
@@ -85,37 +81,50 @@ func AddCaller() Option {
 }
 
 func WithCaller(enabled bool) Option {
-	return optionFunc(func(log *config) {
-		log.ReportCaller = enabled
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.ReportCaller = enabled
 	})
 }
 
 func NoSorting() Option {
-	return optionFunc(func(log *config) {
-		log.DisableSorting = true
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.DisableSorting = true
 	})
 }
 
 func Sorting(disabled bool) Option {
-	return optionFunc(func(log *config) {
-		log.DisableSorting = disabled
+	return optionFunc(func(c *config) {
+		c.consoleConfig.encoderConfig.DisableSorting = disabled
 	})
 }
 
 func WithClock(clock Clock) Option {
-	return optionFunc(func(log *config) {
-		log.clock = clock
+	return optionFunc(func(c *config) {
+		c.clock = clock
 	})
 }
 
 func Output(out io.Writer) Option {
-	return optionFunc(func(log *config) {
-		log.out = out
+	return optionFunc(func(c *config) {
+		c.consoleConfig.out = out
 	})
 }
 
 func ErrOutput(out io.Writer) Option {
-	return optionFunc(func(log *config) {
-		log.errOut = out
+	return optionFunc(func(c *config) {
+		c.errOut = out
+	})
+}
+
+func Graylog(addr string) Option {
+	return optionFunc(func(c *config) {
+		c.gelfConfig.Enabled = true
+		c.gelfConfig.Addr = addr
+	})
+}
+
+func GraylogLevel(lvl Level) Option {
+	return optionFunc(func(c *config) {
+		c.gelfConfig.Level = NewLevelValue(lvl)
 	})
 }

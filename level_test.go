@@ -26,6 +26,9 @@ func TestLevelParse(t *testing.T) {
 
 func TestEnvLevel(t *testing.T) {
 	os.Setenv("PINE_LEVEL", "trace")
+	os.Setenv("PINE_GRAYLOG_LEVEL", "error")
+	os.Setenv("PINE_GRAYLOG_ENABLED", "true")
 	lgr := New()
-	assert.Equal(t, TraceLevel, *lgr.level.Value)
+	assert.Equal(t, TraceLevel, (lgr.handlers[0].(*consoleHandler)).level.GetLevel())
+	assert.Equal(t, ErrorLevel, (lgr.handlers[1].(*gelfHandler)).level.GetLevel())
 }

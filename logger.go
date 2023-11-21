@@ -4,53 +4,52 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/go-pckg/pine/gelf"
 )
 
 const defaultFramesToSkip = 3
 
-type config struct {
-	encoderConfig
+type consoleConfig struct {
+	encoderConfig encoderConfig
+	level         *LevelValue
+	out           io.Writer
+}
 
-	level           *LevelValue
+type gelfConfig struct {
+	Enabled bool
+	Addr    string
+	Level   *LevelValue
+}
+
+type config struct {
+	consoleConfig consoleConfig
+	gelfConfig    gelfConfig
+
 	stackTraceLevel *LevelValue
-	out             io.Writer
 	errOut          io.Writer
 	clock           Clock
 	fields          map[string]Field
 }
 
-func NewDevelopment(options ...Option) *Logger {
-	cfg := config{
-		encoderConfig: encoderConfig{
-			development: true,
-			UseColors:   true,
-		},
-		out:             os.Stderr,
-		errOut:          os.Stderr,
-		clock:           DefaultClock,
-		level:           NewLevelValue(DebugLevel),
-		stackTraceLevel: NewLevelValue(ErrorLevel),
-		fields:          map[string]Field{},
-	}
-
-	for _, opt := range options {
-		opt.apply(&cfg)
-	}
-
-	return create(cfg)
-}
-
 func New(options ...Option) *Logger {
 	cfg := config{
-		encoderConfig: encoderConfig{
-			UseColors: readEnvOrDefaultUseColors(false),
+		consoleConfig: consoleConfig{
+			encoderConfig: encoderConfig{
+				UseColors: readEnvOrDefaultUseColors(false),
+			},
+			level: NewLevelValue(readEnvOrDefaultLevel("PINE_LEVEL", DebugLevel)),
+			out:   os.Stderr,
 		},
-		out:             os.Stderr,
+		gelfConfig: gelfConfig{
+			Enabled: readEnvOrDefaultBool("PINE_GRAYLOG_ENABLED", false),
+			Level:   NewLevelValue(readEnvOrDefaultLevel("PINE_GRAYLOG_LEVEL", readEnvOrDefaultLevel("PINE_LEVEL", DebugLevel))),
+		},
 		errOut:          os.Stderr,
 		clock:           DefaultClock,
-		level:           NewLevelValue(readEnvOrDefaultLevel(DebugLevel)),
 		stackTraceLevel: NewLevelValue(ErrorLevel),
 		fields:          map[string]Field{},
 	}
@@ -63,16 +62,28 @@ func New(options ...Option) *Logger {
 }
 
 func create(cfg config) *Logger {
-	enc := newConsoleEncoder(cfg.encoderConfig)
+	handlers := []handler{
+		&consoleHandler{
+			level:   cfg.consoleConfig.level,
+			encoder: newConsoleEncoder(cfg.consoleConfig.encoderConfig),
+			out:     cfg.consoleConfig.out,
+		},
+	}
+	if cfg.gelfConfig.Enabled {
+		handlers = append(handlers, &gelfHandler{
+			level:   cfg.gelfConfig.Level,
+			encoder: newGelfEncoder(),
+			out:     gelf.NewTCPWriter(cfg.gelfConfig.Addr),
+			errOut:  cfg.errOut,
+		})
+	}
 
 	lgr := &Logger{
-		out:             cfg.out,
+		handlers:        handlers,
 		errOut:          cfg.errOut,
-		encoder:         enc,
 		clock:           cfg.clock,
 		lock:            &sync.Mutex{},
 		fields:          cfg.fields,
-		level:           cfg.level,
 		stackTraceLevel: cfg.stackTraceLevel,
 	}
 
@@ -80,12 +91,10 @@ func create(cfg config) *Logger {
 }
 
 type Logger struct {
-	level           *LevelValue
 	stackTraceLevel *LevelValue
 
-	encoder encoder
+	handlers []handler
 
-	out    io.Writer
 	errOut io.Writer
 	lock   *sync.Mutex
 	clock  Clock
@@ -94,12 +103,8 @@ type Logger struct {
 
 func (l *Logger) clone() *Logger {
 	lg := &Logger{
-		out:             l.out,
 		errOut:          l.errOut,
-		level:           l.level,
 		stackTraceLevel: l.stackTraceLevel,
-
-		encoder: l.encoder.clone(),
 
 		clock:  l.clock,
 		lock:   l.lock,
@@ -107,6 +112,9 @@ func (l *Logger) clone() *Logger {
 	}
 	for k := range l.fields {
 		lg.fields[k] = l.fields[k]
+	}
+	for i := range l.handlers {
+		lg.handlers = append(lg.handlers, l.handlers[i].clone())
 	}
 	return lg
 }
@@ -188,47 +196,59 @@ func (l *Logger) WithFields(fields ...Field) *Entry {
 	return e
 }
 
-func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields []Field) {
-	if l.isLevelEnabled(lvl) {
-		msg := sprintf(template, fmtArgs)
-		e := l.newEntry()
-		defer func() {
-			entryPool.Put(e)
-		}()
+func (l *Logger) Close() {
+	l.lock.Lock()
+	defer l.lock.Unlock()
 
-		e.level = lvl
-		e.message = msg
-		e.logger = l
-		e.logCaller(defaultFramesToSkip)
-
-		for i := range fields {
-			if fields[i].tp == errorType && fields[i].err != nil && l.shouldPrintTrace(lvl) {
-				stackTracer := getStackTracer(fields[i].err)
-				if stackTracer != nil {
-					e.stack = stackTracer.StackTrace()
-					stackTrace := marshalStack(e.stack)
-					fields = append(fields, Json("stack", stackTrace))
-				}
-			}
-		}
-
-		for i := range l.fields {
-			fields = append(fields, l.fields[i])
-		}
-
-		l.lock.Lock()
-		defer l.lock.Unlock()
-
-		if err := l.write(e, fields); err != nil {
-			if l.errOut != nil {
-				fmt.Fprintf(l.errOut, "%v write error: %v\n", e.time, err)
-			}
-		}
+	for i := range l.handlers {
+		l.handlers[i].close()
 	}
 }
 
-func (l *Logger) isLevelEnabled(lvl Level) bool {
-	return l.level.GetLevel() >= lvl
+func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields []Field) {
+	var e *Entry
+	for i := range l.handlers {
+		if l.handlers[i].isLevelEnabled(lvl) {
+			if e == nil {
+				e = l.newEntry()
+				defer func() {
+					entryPool.Put(e)
+				}()
+
+				e.level = lvl
+				e.message = sprintf(template, fmtArgs)
+				e.logger = l
+				e.logCaller(defaultFramesToSkip)
+				e.stack = nil
+
+				for i := range fields {
+					if fields[i].tp == errorType && fields[i].err != nil {
+						if l.shouldPrintTrace(lvl) {
+							stackTracer := getStackTracer(fields[i].err)
+							if stackTracer != nil {
+								e.stack = stackTracer.StackTrace()
+								stackTrace := marshalStack(e.stack)
+								fields = append(fields, Json("stack", stackTrace))
+							}
+						}
+					}
+				}
+
+				for i := range l.fields {
+					fields = append(fields, l.fields[i])
+				}
+
+				l.lock.Lock()
+				defer l.lock.Unlock()
+			}
+
+			if err := l.handlers[i].write(e, fields); err != nil {
+				if l.errOut != nil {
+					fmt.Fprintf(l.errOut, "%v write error: %v\n", e.time, err)
+				}
+			}
+		}
+	}
 }
 
 func (l *Logger) shouldPrintTrace(lvl Level) bool {
@@ -239,18 +259,6 @@ func (l *Logger) newEntry() *Entry {
 	e := entryPool.Get().(*Entry)
 	e.time = l.clock.Now()
 	return e
-}
-
-func (l *Logger) write(ent *Entry, fields []Field) error {
-	buf, err := l.encoder.encodeEntry(ent, fields)
-	if err != nil {
-		return err
-	}
-	_, err = l.out.Write(buf)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 func sprintf(format string, a []interface{}) string {
@@ -265,8 +273,8 @@ func sprintf(format string, a []interface{}) string {
 	return fmt.Sprint(a...)
 }
 
-func readEnvOrDefaultLevel(defaultLevel Level) Level {
-	level := os.Getenv("PINE_LEVEL")
+func readEnvOrDefaultLevel(key string, defaultLevel Level) Level {
+	level := os.Getenv(key)
 	if level == "" {
 		return defaultLevel
 	}
@@ -288,4 +296,101 @@ func readEnvOrDefaultUseColors(defaultUseColors bool) bool {
 		return true
 	}
 	return false
+}
+
+func readEnvOrDefaultBool(key string, defaultVal bool) bool {
+	v := os.Getenv(key)
+	if v == "" {
+		return defaultVal
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return defaultVal
+	}
+	return b
+}
+
+type handler interface {
+	isLevelEnabled(lvl Level) bool
+	write(ent *Entry, fields []Field) error
+	clone() handler
+	close()
+}
+
+type consoleHandler struct {
+	level   *LevelValue
+	encoder encoder
+	out     io.Writer
+}
+
+func (h *consoleHandler) isLevelEnabled(lvl Level) bool {
+	return h.level.GetLevel() >= lvl
+}
+
+func (h *consoleHandler) write(ent *Entry, fields []Field) error {
+	buf, err := h.encoder.encodeEntry(ent, fields)
+	if err != nil {
+		return err
+	}
+	_, err = h.out.Write(buf)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *consoleHandler) clone() handler {
+	return &consoleHandler{
+		level:   h.level,
+		encoder: h.encoder.clone(),
+		out:     h.out,
+	}
+}
+
+func (h *consoleHandler) close() {
+	//noop
+}
+
+type gelfHandler struct {
+	level   *LevelValue
+	encoder encoder
+	out     io.WriteCloser
+	errOut  io.Writer
+	mu      sync.Mutex
+}
+
+func (h *gelfHandler) isLevelEnabled(lvl Level) bool {
+	return h.level.GetLevel() >= lvl
+}
+
+func (h *gelfHandler) write(ent *Entry, fields []Field) error {
+	buf, err := h.encoder.encodeEntry(ent, fields)
+	if err != nil {
+		return err
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	_, err = h.out.Write(buf)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (h *gelfHandler) clone() handler {
+	return &gelfHandler{
+		level:   h.level,
+		encoder: h.encoder.clone(),
+		out:     h.out,
+		errOut:  h.errOut,
+	}
+}
+
+func (h *gelfHandler) close() {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	err := h.out.Close()
+	if err != nil {
+		fmt.Fprintf(h.errOut, "gelf close error: %v\n", err)
+	}
 }

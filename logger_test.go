@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -147,11 +146,14 @@ func TestLogger_Colored(t *testing.T) {
 }
 
 func TestLogger_Caller(t *testing.T) {
+	getCaller = func(skip int) (pc uintptr, file string, line int, ok bool) {
+		return 0, "logger_test.go", 2, true
+	}
+
 	buf := &bytes.Buffer{}
 	lgr := New(AddCaller(), Output(buf), WithClock(newTestClock()))
 	lgr.Info("testcaller")
-	_, _, line, _ := runtime.Caller(0) //nolint:dogsled
-	assert.Equal(t, fmt.Sprintf("2022-08-10T21:29:59.123Z INF logger_test.go:%v testcaller\n", line-1), buf.String())
+	assert.Equal(t, "2022-08-10T21:29:59.123Z INF logger_test.go:2 testcaller\n", buf.String())
 }
 
 func TestLogger_WithFields(t *testing.T) {
@@ -288,4 +290,98 @@ func TestLogger_RaceMultiple(t *testing.T) {
 	}
 
 	assert.Equal(t, workers*cycles, counter)
+}
+
+func TestLogger_Graylog(t *testing.T) {
+	getCaller = func(skip int) (pc uintptr, file string, line int, ok bool) {
+		return 0, "logger_test.go", 2, true
+	}
+
+	tests := []struct {
+		name           string
+		loggerOptions  []Option
+		doLog          func(lgr *Logger)
+		wantConsoleLog string
+		wantGelfLog    []string
+	}{
+		{
+			name:          "basic",
+			loggerOptions: []Option{WithClock(newTestClock()), GraylogLevel(TraceLevel)},
+			doLog: func(lgr *Logger) {
+				lgr.Info("hello", String("A", "B"))
+				lgr.Info("hello2", String("A1", "B1"))
+			},
+			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B\n2022-08-10T21:29:59.123Z INF hello2 A1=B1\n",
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+				`{"version":"1.1","host":"kronos.local","short_message":"hello2","timestamp":1660166999,"level":6,"_A1":"B1","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+			},
+		},
+		{
+			name:          "levels",
+			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(InfoLevel), GraylogLevel(TraceLevel)},
+			doLog: func(lgr *Logger) {
+				lgr.Info("hello", String("A", "B"))
+				lgr.Trace("hello2", String("A1", "B1"))
+			},
+			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B\n",
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+				`{"version":"1.1","host":"kronos.local","short_message":"hello2","timestamp":1660166999,"level":7,"_A1":"B1","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lgr, shutdown := newLoggerWithGraylog(t, tt.loggerOptions...)
+			tt.doLog(lgr)
+			consoleLog, gelfLog := shutdown(t)
+			assert.Equal(t, tt.wantConsoleLog, consoleLog)
+			require.Equal(t, tt.wantGelfLog, gelfLog)
+		})
+	}
+}
+
+func TestLogger_Graylog_Clone(t *testing.T) {
+	lgr, shutdown := newLoggerWithGraylog(t, WithClock(newTestClock()), GraylogLevel(TraceLevel))
+	lgr2 := lgr.With(String("A", "B"))
+
+	lgr.Info("hello")
+	lgr2.Info("hello")
+
+	_, gelfMessages := shutdown(t)
+
+	require.Equal(t, 2, len(gelfMessages))
+}
+
+func newServer(t *testing.T) *TCPServer {
+	t.Helper()
+	server := NewTCPServer("127.0.0.1:0")
+	err := server.Run()
+	require.NoError(t, err)
+	return server
+}
+
+func newLoggerWithGraylog(t *testing.T, opts ...Option) (*Logger, func(t *testing.T) (string, []string)) {
+	t.Helper()
+	server := newServer(t)
+
+	buf := &bytes.Buffer{}
+	options := append([]Option{}, opts...)
+	options = append(options, Output(buf), Graylog(server.Addr()))
+
+	lgr := New(options...)
+
+	shutdown := func(t *testing.T) (string, []string) {
+		t.Helper()
+		time.Sleep(time.Millisecond)
+		lgr.Close()
+		err := server.Close()
+		require.NoError(t, err)
+
+		return buf.String(), server.messages
+	}
+
+	return lgr, shutdown
 }
