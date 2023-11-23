@@ -47,6 +47,7 @@ func New(options ...Option) *Logger {
 		gelfConfig: gelfConfig{
 			Enabled: readEnvOrDefaultBool("PINE_GRAYLOG_ENABLED", false),
 			Level:   NewLevelValue(readEnvOrDefaultLevel("PINE_GRAYLOG_LEVEL", readEnvOrDefaultLevel("PINE_LEVEL", DebugLevel))),
+			Addr:    readEnvOrDefaultString("PINE_GRAYLOG_ADDR", ""),
 		},
 		errOut:          os.Stderr,
 		clock:           DefaultClock,
@@ -308,6 +309,14 @@ func readEnvOrDefaultBool(key string, defaultVal bool) bool {
 		return defaultVal
 	}
 	return b
+}
+
+func readEnvOrDefaultString(key string, defaultVal string) string {
+	v, ok := os.LookupEnv(key)
+	if !ok {
+		return defaultVal
+	}
+	return v
 }
 
 type handler interface {
