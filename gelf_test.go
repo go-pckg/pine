@@ -119,37 +119,25 @@ func (t *TCPServer) serve(conn net.Conn) {
 		data = append(data, tmp[:n]...)
 
 		for {
-			hasMessage, start, end := detectJsonMessage(data)
+			hasMessage, start, end := detectMessage(data)
 			if !hasMessage {
 				break
 			}
-			t.messages = append(t.messages, string(data[start:end]))
-			data = data[end:]
+			t.messages = append(t.messages, string(data[start:end-1]))
+			data = data[end+1:]
 		}
 	}
 }
 
-func detectJsonMessage(data []byte) (hasMessage bool, first int, last int) {
-	open := 0
-	closed := 0
-	started := false
-	first = 0
+func detectMessage(data []byte) (hasMessage bool, first int, last int) {
 	hasMessage = false
 
-	for i, c := range data {
-		if c == '{' {
-			if !started {
-				first = i
-				started = true
-			}
-			open++
-		} else if c == '}' {
-			closed++
-			if open != 0 && open == closed {
-				last = i + 1
-				hasMessage = true
-				return
-			}
+	for i := range data {
+		if i+1 < len(data) && data[i] == '\n' && data[i+1] == byte(0) {
+			hasMessage = true
+			first = 0
+			last = i + 1
+			return
 		}
 	}
 	return

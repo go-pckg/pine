@@ -45,5 +45,13 @@ func (m *Message) MarshalJSONBuf(buf *bytes.Buffer) error {
 			return err
 		}
 	}
-	return buf.WriteByte('}')
+	err = buf.WriteByte('}')
+	if err != nil {
+		return err
+	}
+	err = buf.WriteByte('\n')
+	if err != nil {
+		return err
+	}
+	return buf.WriteByte(byte(0))
 }
