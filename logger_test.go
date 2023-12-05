@@ -299,6 +299,7 @@ func TestLogger_Graylog(t *testing.T) {
 
 	tests := []struct {
 		name           string
+		env            map[string]string
 		loggerOptions  []Option
 		doLog          func(lgr *Logger)
 		wantConsoleLog string
@@ -330,10 +331,25 @@ func TestLogger_Graylog(t *testing.T) {
 				`{"version":"1.1","host":"kronos.local","short_message":"hello2","timestamp":1660166999,"level":7,"_A1":"B1","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
 			},
 		},
+		{
+			name:          "extra fields",
+			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(InfoLevel), GraylogLevel(TraceLevel)},
+			env:           map[string]string{"PINE_GRAYLOG_EXTRA_SOURCE": "api-service", "PINE_GRAYLOG_EXTRA_POD": "api-7776bb867b-mk4m6"},
+			doLog: func(lgr *Logger) {
+				lgr.Info("hello", String("A", "B"))
+			},
+			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B\n",
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2,"_pod":"api-7776bb867b-mk4m6","_source":"api-service"}`,
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			for k, v := range tt.env {
+				require.NoError(t, os.Setenv(k, v))
+			}
 			lgr, shutdown := newLoggerWithGraylog(t, tt.loggerOptions...)
 			tt.doLog(lgr)
 			consoleLog, gelfLog := shutdown(t)

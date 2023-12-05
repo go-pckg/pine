@@ -205,14 +205,15 @@ func (l consoleEncoder) needsQuoting(text string) bool {
 }
 
 type gelfEncoder struct {
+	extraFields map[string]Field
 }
 
-func newGelfEncoder() gelfEncoder {
-	return gelfEncoder{}
+func newGelfEncoder(extraFields map[string]Field) gelfEncoder {
+	return gelfEncoder{extraFields: extraFields}
 }
 
 func (l gelfEncoder) clone() encoder {
-	return newGelfEncoder()
+	return newGelfEncoder(l.extraFields)
 }
 
 func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
@@ -242,6 +243,12 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 
 	if ent.stack != nil {
 		gelfMsg.Extra["_stack"] = fmt.Sprintf("%+v", ent.stack)
+	}
+
+	for i := range l.extraFields {
+		if err := l.appendField(gelfMsg.Extra, l.extraFields[i]); err != nil {
+			return nil, err
+		}
 	}
 
 	for i := range fields {

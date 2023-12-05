@@ -20,9 +20,10 @@ type consoleConfig struct {
 }
 
 type gelfConfig struct {
-	Enabled bool
-	Addr    string
-	Level   *LevelValue
+	Enabled     bool
+	Addr        string
+	Level       *LevelValue
+	ExtraFields map[string]Field
 }
 
 type config struct {
@@ -45,9 +46,10 @@ func New(options ...Option) *Logger {
 			out:   os.Stderr,
 		},
 		gelfConfig: gelfConfig{
-			Enabled: readEnvOrDefaultBool("PINE_GRAYLOG_ENABLED", false),
-			Level:   NewLevelValue(readEnvOrDefaultLevel("PINE_GRAYLOG_LEVEL", readEnvOrDefaultLevel("PINE_LEVEL", DebugLevel))),
-			Addr:    readEnvOrDefaultString("PINE_GRAYLOG_ADDR", ""),
+			Enabled:     readEnvOrDefaultBool("PINE_GRAYLOG_ENABLED", false),
+			Level:       NewLevelValue(readEnvOrDefaultLevel("PINE_GRAYLOG_LEVEL", readEnvOrDefaultLevel("PINE_LEVEL", DebugLevel))),
+			Addr:        readEnvOrDefaultString("PINE_GRAYLOG_ADDR", ""),
+			ExtraFields: readGraylogExtraFields("PINE_GRAYLOG_EXTRA_"),
 		},
 		errOut:          os.Stderr,
 		clock:           DefaultClock,
@@ -73,7 +75,7 @@ func create(cfg config) *Logger {
 	if cfg.gelfConfig.Enabled {
 		handlers = append(handlers, &gelfHandler{
 			level:   cfg.gelfConfig.Level,
-			encoder: newGelfEncoder(),
+			encoder: newGelfEncoder(cfg.gelfConfig.ExtraFields),
 			out:     gelf.NewTCPWriter(cfg.gelfConfig.Addr),
 			errOut:  cfg.errOut,
 		})
@@ -317,6 +319,21 @@ func readEnvOrDefaultString(key string, defaultVal string) string {
 		return defaultVal
 	}
 	return v
+}
+
+func readGraylogExtraFields(prefix string) map[string]Field {
+	kvPairs := os.Environ()
+	fields := map[string]Field{}
+	for _, kvPair := range kvPairs {
+		if strings.HasPrefix(kvPair, prefix) {
+			kv := strings.SplitN(kvPair, "=", 2)
+			if len(kv) == 2 {
+				name := strings.ToLower(strings.TrimPrefix(kv[0], prefix))
+				fields[name] = String(name, kv[1])
+			}
+		}
+	}
+	return fields
 }
 
 type handler interface {
