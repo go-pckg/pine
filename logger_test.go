@@ -343,10 +343,35 @@ func TestLogger_Graylog(t *testing.T) {
 				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2,"_pod":"api-7776bb867b-mk4m6","_source":"api-service"}`,
 			},
 		},
+		{
+			name:          "extra field host takes precedence over hostname var",
+			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(InfoLevel), GraylogLevel(TraceLevel)},
+			env:           map[string]string{"PINE_GRAYLOG_EXTRA_HOST": "api-service"},
+			doLog: func(lgr *Logger) {
+				lgr.Info("hello", String("A", "B"))
+			},
+			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B\n",
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"api-service","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+			},
+		},
+		{
+			name:          "host field takes precedence over extra field",
+			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(InfoLevel), GraylogLevel(TraceLevel)},
+			env:           map[string]string{"PINE_GRAYLOG_EXTRA_HOST": "api-service"},
+			doLog: func(lgr *Logger) {
+				lgr.Info("hello", String("A", "B"), String("host", "fieldhost"))
+			},
+			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B host=fieldhost\n",
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"fieldhost","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			os.Clearenv()
 			for k, v := range tt.env {
 				require.NoError(t, os.Setenv(k, v))
 			}

@@ -218,6 +218,12 @@ func (l gelfEncoder) clone() encoder {
 
 func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 	hostname := defaultHostname()
+	for k, f := range l.extraFields {
+		if k == "host" {
+			hostname = f.string
+			break
+		}
+	}
 	for i := range fields {
 		if fields[i].key == "host" {
 			hostname = fields[i].string
@@ -246,12 +252,18 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 	}
 
 	for i := range l.extraFields {
+		if l.extraFields[i].key == "host" {
+			continue
+		}
 		if err := l.appendField(gelfMsg.Extra, l.extraFields[i]); err != nil {
 			return nil, err
 		}
 	}
 
 	for i := range fields {
+		if fields[i].key == "host" {
+			continue
+		}
 		if err := l.appendField(gelfMsg.Extra, fields[i]); err != nil {
 			return nil, err
 		}
