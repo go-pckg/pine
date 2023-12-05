@@ -11,7 +11,7 @@ import (
 	"github.com/go-pckg/pine/gelf"
 )
 
-const defaultFramesToSkip = 3
+const defaultFramesToSkip = 4
 
 type consoleConfig struct {
 	encoderConfig encoderConfig
