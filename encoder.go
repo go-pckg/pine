@@ -137,12 +137,6 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 		}
 	}
 
-	if ent.stack != nil {
-		if _, err := buf.WriteString(fmt.Sprintf("%+v", ent.stack)); err != nil {
-			return nil, err
-		}
-	}
-
 	if _, err := buf.WriteRune('\n'); err != nil {
 		return nil, err
 	}

@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -167,7 +168,8 @@ func TestLogger_Stacktrace(t *testing.T) {
 	buf := &bytes.Buffer{}
 	lgr := New(Output(buf), WithClock(newTestClock()))
 	lgr.Error("hello", Err(outer()))
-	assert.Regexp(t, "2022-08-10T21:29:59.123Z ERR hello error=test stack=\"\\[{\\\\\"func\\\\\":\\\\\"inner\\\\\",\\\\\"line\\\\\":\\\\\"10\\\\\",\\\\\"source\\\\\":\\\\\"stacktrace_test.go\\\\\"},{\\\\\"func\\\\\":\\\\\"outer\\\\\",\\\\\"line\\\\\":\\\\\"6\\\\\",\\\\\"source\\\\\":\\\\\"stacktrace_test.go\\\\\"}(.*)\n", buf.String())
+	assert.Equal(t, `2022-08-10T21:29:59.123Z ERR hello error=test stack="[{\"func\":\"inner\",\"line\":\"10\",\"source\":\"stacktrace_test.go\"},{\"func\":\"outer\",\"line\":\"6\",\"source\":\"stacktrace_test.go\"},{\"func\":\"TestLogger_Stacktrace\",\"line\":\"170\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+`, buf.String())
 }
 
 func TestLogger_Error(t *testing.T) {
@@ -365,6 +367,18 @@ func TestLogger_Graylog(t *testing.T) {
 			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B host=fieldhost\n",
 			wantGelfLog: []string{
 				`{"version":"1.1","host":"fieldhost","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+			},
+		},
+		{
+			name:          "graylog error stack",
+			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(TraceLevel), GraylogLevel(TraceLevel), WithStackTraceLevel(TraceLevel)},
+			doLog: func(lgr *Logger) {
+				lgr.Error("hello", String("A", "B"), Err(errors.WithStack(errors.New("test error"))))
+			},
+			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello A=B error="test error" stack="[{\"func\":\"TestLogger_Graylog.func7\",\"line\":\"376\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func8\",\"line\":\"393\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+`,
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":3,"_A":"B","_caller":"logger_test.go:2","_error":"test error","_file":"logger_test.go","_line":2,"_stack":"[{\"func\":\"TestLogger_Graylog.func7\",\"line\":\"376\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func8\",\"line\":\"393\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"}`,
 			},
 		},
 	}
