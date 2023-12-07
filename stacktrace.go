@@ -2,6 +2,7 @@ package pine
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/pkg/errors"
 )
@@ -61,6 +62,14 @@ func marshalStack(st errors.StackTrace) interface{} {
 		})
 	}
 	return out
+}
+
+func flattenStack(st errors.StackTrace) string {
+	sb := strings.Builder{}
+	for _, fr := range st {
+		sb.WriteString(fmt.Sprintf("%n() at %s:%d <- ", fr, fr, fr))
+	}
+	return strings.TrimRight(sb.String(), " <- ")
 }
 
 type frameFormatter interface {

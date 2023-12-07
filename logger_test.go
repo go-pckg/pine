@@ -175,7 +175,7 @@ func TestLogger_Stacktrace(t *testing.T) {
 	buf := &bytes.Buffer{}
 	lgr := New(Output(buf), WithClock(newTestClock()))
 	lgr.Error("hello", Err(outer()))
-	assert.Equal(t, `2022-08-10T21:29:59.123Z ERR hello error=test stack="[{\"func\":\"inner\",\"line\":\"10\",\"source\":\"stacktrace_test.go\"},{\"func\":\"outer\",\"line\":\"6\",\"source\":\"stacktrace_test.go\"},{\"func\":\"TestLogger_Stacktrace\",\"line\":\"177\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+	assert.Equal(t, `2022-08-10T21:29:59.123Z ERR hello error=test stack="inner() at stacktrace_test.go:10 <- outer() at stacktrace_test.go:6 <- TestLogger_Stacktrace() at logger_test.go:177 <- tRunner() at testing.go:1108 <- goexit() at asm_amd64.s:1374"
 `, buf.String())
 }
 
@@ -382,7 +382,7 @@ func TestLogger_Graylog(t *testing.T) {
 			doLog: func(lgr *Logger) {
 				lgr.Error("hello", String("A", "B"), Err(errors.WithStack(errors.New("test error"))))
 			},
-			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello A=B error="test error" stack="[{\"func\":\"TestLogger_Graylog.func7\",\"line\":\"383\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func9\",\"line\":\"412\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello A=B error="test error" stack="TestLogger_Graylog.func7() at logger_test.go:383 <- TestLogger_Graylog.func9() at logger_test.go:412 <- tRunner() at testing.go:1108 <- goexit() at asm_amd64.s:1374"
 `,
 			wantGelfLog: []string{
 				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":3,"_A":"B","_caller":"logger_test.go:2","_error":"test error","_file":"logger_test.go","_line":2,"_stack":"\ngithub.com/go-pckg/pine.TestLogger_Graylog.func7\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:383\ngithub.com/go-pckg/pine.TestLogger_Graylog.func9\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:412\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1108\nruntime.goexit\n\t/usr/local/go/src/runtime/asm_amd64.s:1374"}`,
@@ -394,7 +394,7 @@ func TestLogger_Graylog(t *testing.T) {
 			doLog: func(lgr *Logger) {
 				lgr.Error("hello", String("stack", "custom"), Err(errors.WithStack(errors.New("test error"))))
 			},
-			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello error="test error" stack=custom stack="[{\"func\":\"TestLogger_Graylog.func8\",\"line\":\"395\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func9\",\"line\":\"412\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello error="test error" stack=custom stack="TestLogger_Graylog.func8() at logger_test.go:395 <- TestLogger_Graylog.func9() at logger_test.go:412 <- tRunner() at testing.go:1108 <- goexit() at asm_amd64.s:1374"
 `,
 			wantGelfLog: []string{
 				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":3,"_caller":"logger_test.go:2","_error":"test error","_file":"logger_test.go","_line":2,"_stack":"\ngithub.com/go-pckg/pine.TestLogger_Graylog.func8\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:395\ngithub.com/go-pckg/pine.TestLogger_Graylog.func9\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:412\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1108\nruntime.goexit\n\t/usr/local/go/src/runtime/asm_amd64.s:1374"}`,

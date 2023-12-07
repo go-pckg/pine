@@ -121,8 +121,8 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 	}
 
 	if ent.stack != nil {
-		stackTrace := marshalStack(ent.stack)
-		fields = append(fields, Json("stack", stackTrace))
+		stackTrace := flattenStack(ent.stack)
+		fields = append(fields, String("stack", stackTrace))
 	}
 
 	fieldsMap := map[string][]Field{}
