@@ -120,11 +120,18 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 		}
 	}
 
-	fieldsMap := map[string]Field{}
+	if ent.stack != nil {
+		stackTrace := marshalStack(ent.stack)
+		fields = append(fields, Json("stack", stackTrace))
+	}
+
+	fieldsMap := map[string][]Field{}
 	fieldKeys := []string{}
 	for i := range fields {
-		fieldsMap[fields[i].key] = fields[i]
-		fieldKeys = append(fieldKeys, fields[i].key)
+		if _, ok := fieldsMap[fields[i].key]; !ok {
+			fieldKeys = append(fieldKeys, fields[i].key)
+		}
+		fieldsMap[fields[i].key] = append(fieldsMap[fields[i].key], fields[i])
 	}
 
 	if !l.DisableSorting {
@@ -132,8 +139,10 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 	}
 
 	for _, key := range fieldKeys {
-		if err := l.appendField(buf, fieldsMap[key]); err != nil {
-			return nil, err
+		for _, field := range fieldsMap[key] {
+			if err := l.appendField(buf, field); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -241,10 +250,6 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 		gelfMsg.Extra["_line"] = ent.caller.Line
 	}
 
-	if ent.stack != nil {
-		gelfMsg.Extra["_stack"] = fmt.Sprintf("%+v", ent.stack)
-	}
-
 	for i := range l.extraFields {
 		if l.extraFields[i].key == "host" {
 			continue
@@ -261,6 +266,10 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 		if err := l.appendField(gelfMsg.Extra, fields[i]); err != nil {
 			return nil, err
 		}
+	}
+
+	if ent.stack != nil {
+		gelfMsg.Extra["_stack"] = fmt.Sprintf("%+v", ent.stack)
 	}
 
 	buf := newBuffer()

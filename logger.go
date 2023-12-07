@@ -230,8 +230,6 @@ func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields [
 							stackTracer := getStackTracer(fields[i].err)
 							if stackTracer != nil {
 								e.stack = stackTracer.StackTrace()
-								stackTrace := marshalStack(e.stack)
-								fields = append(fields, Json("stack", stackTrace))
 							}
 						}
 					}

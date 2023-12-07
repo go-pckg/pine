@@ -106,6 +106,13 @@ func TestLogger_Order(t *testing.T) {
 	assert.Equal(t, "2022-08-10T21:29:59.123Z INF hello A=1 B=2 C=3\n", buf.String())
 }
 
+func TestLogger_FieldDuplication(t *testing.T) {
+	buf := &bytes.Buffer{}
+	lgr := New(NoColors(), Output(buf), WithClock(newTestClock()), NoSorting(), Fields(String("myfield", "oldvalue")))
+	lgr.Info("hello", String("myfield", "newvalue"))
+	assert.Equal(t, "2022-08-10T21:29:59.123Z INF hello myfield=newvalue myfield=oldvalue\n", buf.String())
+}
+
 func TestLogger_LevelChange(t *testing.T) {
 	lvl := NewLevelValue(DebugLevel)
 
@@ -168,7 +175,7 @@ func TestLogger_Stacktrace(t *testing.T) {
 	buf := &bytes.Buffer{}
 	lgr := New(Output(buf), WithClock(newTestClock()))
 	lgr.Error("hello", Err(outer()))
-	assert.Equal(t, `2022-08-10T21:29:59.123Z ERR hello error=test stack="[{\"func\":\"inner\",\"line\":\"10\",\"source\":\"stacktrace_test.go\"},{\"func\":\"outer\",\"line\":\"6\",\"source\":\"stacktrace_test.go\"},{\"func\":\"TestLogger_Stacktrace\",\"line\":\"170\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+	assert.Equal(t, `2022-08-10T21:29:59.123Z ERR hello error=test stack="[{\"func\":\"inner\",\"line\":\"10\",\"source\":\"stacktrace_test.go\"},{\"func\":\"outer\",\"line\":\"6\",\"source\":\"stacktrace_test.go\"},{\"func\":\"TestLogger_Stacktrace\",\"line\":\"177\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
 `, buf.String())
 }
 
@@ -362,11 +369,11 @@ func TestLogger_Graylog(t *testing.T) {
 			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(InfoLevel), GraylogLevel(TraceLevel)},
 			env:           map[string]string{"PINE_GRAYLOG_EXTRA_HOST": "api-service"},
 			doLog: func(lgr *Logger) {
-				lgr.Info("hello", String("A", "B"), String("host", "fieldhost"))
+				lgr.Info("hello", String("A", "B"), String("host", "customhost"))
 			},
-			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B host=fieldhost\n",
+			wantConsoleLog: "2022-08-10T21:29:59.123Z INF hello A=B host=customhost\n",
 			wantGelfLog: []string{
-				`{"version":"1.1","host":"fieldhost","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
+				`{"version":"1.1","host":"customhost","short_message":"hello","timestamp":1660166999,"level":6,"_A":"B","_caller":"logger_test.go:2","_file":"logger_test.go","_line":2}`,
 			},
 		},
 		{
@@ -375,10 +382,22 @@ func TestLogger_Graylog(t *testing.T) {
 			doLog: func(lgr *Logger) {
 				lgr.Error("hello", String("A", "B"), Err(errors.WithStack(errors.New("test error"))))
 			},
-			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello A=B error="test error" stack="[{\"func\":\"TestLogger_Graylog.func7\",\"line\":\"376\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func8\",\"line\":\"393\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello A=B error="test error" stack="[{\"func\":\"TestLogger_Graylog.func7\",\"line\":\"383\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func9\",\"line\":\"412\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
 `,
 			wantGelfLog: []string{
-				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":3,"_A":"B","_caller":"logger_test.go:2","_error":"test error","_file":"logger_test.go","_line":2,"_stack":"[{\"func\":\"TestLogger_Graylog.func7\",\"line\":\"376\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func8\",\"line\":\"393\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"}`,
+				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":3,"_A":"B","_caller":"logger_test.go:2","_error":"test error","_file":"logger_test.go","_line":2,"_stack":"\ngithub.com/go-pckg/pine.TestLogger_Graylog.func7\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:383\ngithub.com/go-pckg/pine.TestLogger_Graylog.func9\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:412\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1108\nruntime.goexit\n\t/usr/local/go/src/runtime/asm_amd64.s:1374"}`,
+			},
+		},
+		{
+			name:          "graylog stack override",
+			loggerOptions: []Option{WithClock(newTestClock()), WithLevel(TraceLevel), GraylogLevel(TraceLevel), WithStackTraceLevel(TraceLevel)},
+			doLog: func(lgr *Logger) {
+				lgr.Error("hello", String("stack", "custom"), Err(errors.WithStack(errors.New("test error"))))
+			},
+			wantConsoleLog: `2022-08-10T21:29:59.123Z ERR hello error="test error" stack=custom stack="[{\"func\":\"TestLogger_Graylog.func8\",\"line\":\"395\",\"source\":\"logger_test.go\"},{\"func\":\"TestLogger_Graylog.func9\",\"line\":\"412\",\"source\":\"logger_test.go\"},{\"func\":\"tRunner\",\"line\":\"1108\",\"source\":\"testing.go\"},{\"func\":\"goexit\",\"line\":\"1374\",\"source\":\"asm_amd64.s\"}]"
+`,
+			wantGelfLog: []string{
+				`{"version":"1.1","host":"kronos.local","short_message":"hello","timestamp":1660166999,"level":3,"_caller":"logger_test.go:2","_error":"test error","_file":"logger_test.go","_line":2,"_stack":"\ngithub.com/go-pckg/pine.TestLogger_Graylog.func8\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:395\ngithub.com/go-pckg/pine.TestLogger_Graylog.func9\n\t/Users/glebteterin/projects/study/go/pine/logger_test.go:412\ntesting.tRunner\n\t/usr/local/go/src/testing/testing.go:1108\nruntime.goexit\n\t/usr/local/go/src/runtime/asm_amd64.s:1374"}`,
 			},
 		},
 	}
