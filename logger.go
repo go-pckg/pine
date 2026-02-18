@@ -34,6 +34,7 @@ type config struct {
 	errOut          io.Writer
 	clock           Clock
 	fields          map[string]Field
+	hooks           []Hook
 }
 
 func New(options ...Option) *Logger {
@@ -83,6 +84,7 @@ func create(cfg config) *Logger {
 
 	lgr := &Logger{
 		handlers:        handlers,
+		hooks:           cfg.hooks,
 		errOut:          cfg.errOut,
 		clock:           cfg.clock,
 		lock:            &sync.Mutex{},
@@ -97,6 +99,7 @@ type Logger struct {
 	stackTraceLevel *LevelValue
 
 	handlers []handler
+	hooks    []Hook
 
 	errOut io.Writer
 	lock   *sync.Mutex
@@ -111,6 +114,7 @@ func (l *Logger) clone() *Logger {
 
 		clock:  l.clock,
 		lock:   l.lock,
+		hooks:  l.hooks,
 		fields: map[string]Field{},
 	}
 	for k := range l.fields {
@@ -241,6 +245,14 @@ func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields [
 
 				l.lock.Lock()
 				defer l.lock.Unlock()
+
+				for _, hook := range l.hooks {
+					if err := hook.Run(e, fields); err != nil {
+						if l.errOut != nil {
+							fmt.Fprintf(l.errOut, "%v hook error: %v\n", e.time, err)
+						}
+					}
+				}
 			}
 
 			if err := l.handlers[i].write(e, fields); err != nil {
@@ -372,7 +384,7 @@ func (h *consoleHandler) clone() handler {
 }
 
 func (h *consoleHandler) close() {
-	//noop
+	// noop
 }
 
 type gelfHandler struct {

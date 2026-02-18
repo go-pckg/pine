@@ -128,3 +128,9 @@ func GraylogLevel(lvl Level) Option {
 		c.gelfConfig.Level = NewLevelValue(lvl)
 	})
 }
+
+func WithHooks(hooks ...Hook) Option {
+	return optionFunc(func(c *config) {
+		c.hooks = append(c.hooks, hooks...)
+	})
+}
