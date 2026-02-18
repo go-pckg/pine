@@ -21,57 +21,57 @@ const (
 )
 
 type Field struct {
-	tp      fieldType
-	key     string
-	string  string
-	int64   int64
-	float64 float64
-	value   interface{}
-	err     error
+	Type    fieldType
+	Key     string
+	String  string
+	Int64   int64
+	Float64 float64
+	Value   interface{}
+	Err     error
 }
 
 func Int(key string, val int) Field {
-	return Field{tp: intType, key: key, int64: int64(val)}
+	return Field{Type: intType, Key: key, Int64: int64(val)}
 }
 func Int8(key string, val int8) Field {
-	return Field{tp: int8Type, key: key, int64: int64(val)}
+	return Field{Type: int8Type, Key: key, Int64: int64(val)}
 }
 func Int16(key string, val int16) Field {
-	return Field{tp: int16Type, key: key, int64: int64(val)}
+	return Field{Type: int16Type, Key: key, Int64: int64(val)}
 }
 func Int32(key string, val int32) Field {
-	return Field{tp: int32Type, key: key, int64: int64(val)}
+	return Field{Type: int32Type, Key: key, Int64: int64(val)}
 }
 func Int64(key string, val int64) Field {
-	return Field{tp: int64Type, key: key, int64: val}
+	return Field{Type: int64Type, Key: key, Int64: val}
 }
 func Float32(key string, val float32) Field {
-	return Field{tp: float32Type, key: key, float64: float64(val)}
+	return Field{Type: float32Type, Key: key, Float64: float64(val)}
 }
 func Float64(key string, val float64) Field {
-	return Field{tp: float64Type, key: key, float64: val}
+	return Field{Type: float64Type, Key: key, Float64: val}
 }
 func Bool(key string, val bool) Field {
 	var v int64
 	if val {
 		v = 1
 	}
-	return Field{tp: boolType, key: key, int64: v}
+	return Field{Type: boolType, Key: key, Int64: v}
 }
 func String(key string, val string) Field {
-	return Field{tp: stringType, key: key, string: val}
+	return Field{Type: stringType, Key: key, String: val}
 }
 func Time(key string, val time.Time) Field {
-	return Field{tp: timeType, key: key, value: val}
+	return Field{Type: timeType, Key: key, Value: val}
 }
 func Err(err error) Field {
-	return Field{tp: errorType, key: "error", err: err}
+	return Field{Type: errorType, Key: "error", Err: err}
 }
 
 //nolint:revive,stylecheck
 func Json(key string, val interface{}) Field {
-	return Field{tp: jsonType, key: key, value: val}
+	return Field{Type: jsonType, Key: key, Value: val}
 }
 func Interface(key string, val interface{}) Field {
-	return Field{tp: interfaceType, key: key, value: val}
+	return Field{Type: interfaceType, Key: key, Value: val}
 }

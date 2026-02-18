@@ -71,7 +71,7 @@ func NoQuotes() Option {
 func Fields(fields ...Field) Option {
 	return optionFunc(func(c *config) {
 		for i := range fields {
-			c.fields[fields[i].key] = fields[i]
+			c.fields[fields[i].Key] = fields[i]
 		}
 	})
 }

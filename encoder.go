@@ -76,8 +76,8 @@ func (l consoleEncoder) clone() encoder {
 }
 
 func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
-	lvl := consoleLevel(ent.level)
-	switch ent.level {
+	lvl := consoleLevel(ent.Level)
+	switch ent.Level {
 	case TraceLevel:
 		lvl = colorize(lvl, colorMagenta, l.UseColors)
 	case DebugLevel:
@@ -97,12 +97,12 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 	}
 
 	var entities []interface{}
-	entities = append(entities, colorize(ent.time.Format("2006-01-02T15:04:05.000Z07:00"), colorDarkGray, l.UseColors))
+	entities = append(entities, colorize(ent.Time.Format("2006-01-02T15:04:05.000Z07:00"), colorDarkGray, l.UseColors))
 	entities = append(entities, lvl)
-	if l.ReportCaller && ent.caller != nil {
-		entities = append(entities, fmt.Sprintf("%s:%v", ent.caller.File, ent.caller.Line))
+	if l.ReportCaller && ent.Caller != nil {
+		entities = append(entities, fmt.Sprintf("%s:%v", ent.Caller.File, ent.Caller.Line))
 	}
-	entities = append(entities, ent.message)
+	entities = append(entities, ent.Message)
 
 	buf := newBuffer()
 	defer func() {
@@ -120,18 +120,18 @@ func (l consoleEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) 
 		}
 	}
 
-	if ent.stack != nil {
-		stackTrace := flattenStack(ent.stack)
+	if ent.Stack != nil {
+		stackTrace := flattenStack(ent.Stack)
 		fields = append(fields, String("stack", stackTrace))
 	}
 
 	fieldsMap := map[string][]Field{}
 	fieldKeys := []string{}
 	for i := range fields {
-		if _, ok := fieldsMap[fields[i].key]; !ok {
-			fieldKeys = append(fieldKeys, fields[i].key)
+		if _, ok := fieldsMap[fields[i].Key]; !ok {
+			fieldKeys = append(fieldKeys, fields[i].Key)
 		}
-		fieldsMap[fields[i].key] = append(fieldsMap[fields[i].key], fields[i])
+		fieldsMap[fields[i].Key] = append(fieldsMap[fields[i].Key], fields[i])
 	}
 
 	if !l.DisableSorting {
@@ -163,7 +163,7 @@ func (l consoleEncoder) appendField(b *bytes.Buffer, field Field) error {
 	}
 
 	var keyColour = colorCyan
-	switch field.tp {
+	switch field.Type {
 	case errorType:
 		keyColour = colorRed
 	}
@@ -171,7 +171,7 @@ func (l consoleEncoder) appendField(b *bytes.Buffer, field Field) error {
 	if b.Len() > 0 {
 		b.WriteByte(' ')
 	}
-	b.WriteString(colorize(field.key, keyColour, l.UseColors))
+	b.WriteString(colorize(field.Key, keyColour, l.UseColors))
 	b.WriteByte('=')
 	l.appendValue(b, value)
 
@@ -223,13 +223,13 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 	hostname := defaultHostname()
 	for k, f := range l.extraFields {
 		if k == "host" {
-			hostname = f.string
+			hostname = f.String
 			break
 		}
 	}
 	for i := range fields {
-		if fields[i].key == "host" {
-			hostname = fields[i].string
+		if fields[i].Key == "host" {
+			hostname = fields[i].String
 			break
 		}
 	}
@@ -237,21 +237,21 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 	gelfMsg := newGelfMsg()
 	defer gelfPool.Put(gelfMsg)
 	gelfMsg.Version = "1.1"
-	gelfMsg.Level = gelfLevel(ent.level)
-	gelfMsg.TimeUnix = float64(ent.time.Unix())
-	gelfMsg.Short = ent.message
+	gelfMsg.Level = gelfLevel(ent.Level)
+	gelfMsg.TimeUnix = float64(ent.Time.Unix())
+	gelfMsg.Short = ent.Message
 	gelfMsg.Full = ""
 	gelfMsg.Host = hostname
 	gelfMsg.Extra = map[string]interface{}{}
 
-	if ent.caller != nil {
-		gelfMsg.Extra["_caller"] = fmt.Sprintf("%s:%v", ent.caller.File, ent.caller.Line)
-		gelfMsg.Extra["_file"] = ent.caller.File
-		gelfMsg.Extra["_line"] = ent.caller.Line
+	if ent.Caller != nil {
+		gelfMsg.Extra["_caller"] = fmt.Sprintf("%s:%v", ent.Caller.File, ent.Caller.Line)
+		gelfMsg.Extra["_file"] = ent.Caller.File
+		gelfMsg.Extra["_line"] = ent.Caller.Line
 	}
 
 	for i := range l.extraFields {
-		if l.extraFields[i].key == "host" {
+		if l.extraFields[i].Key == "host" {
 			continue
 		}
 		if err := l.appendField(gelfMsg.Extra, l.extraFields[i]); err != nil {
@@ -260,7 +260,7 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 	}
 
 	for i := range fields {
-		if fields[i].key == "host" {
+		if fields[i].Key == "host" {
 			continue
 		}
 		if err := l.appendField(gelfMsg.Extra, fields[i]); err != nil {
@@ -268,8 +268,8 @@ func (l gelfEncoder) encodeEntry(ent *Entry, fields []Field) ([]byte, error) {
 		}
 	}
 
-	if ent.stack != nil {
-		gelfMsg.Extra["_stack"] = fmt.Sprintf("%+v", ent.stack)
+	if ent.Stack != nil {
+		gelfMsg.Extra["_stack"] = fmt.Sprintf("%+v", ent.Stack)
 	}
 
 	buf := newBuffer()
@@ -289,7 +289,7 @@ func (l gelfEncoder) appendField(m map[string]interface{}, field Field) error {
 		return nil
 	}
 
-	m["_"+field.key] = value
+	m["_"+field.Key] = value
 
 	return nil
 }
@@ -339,45 +339,45 @@ func gelfLevel(lvl Level) int32 {
 func getStringValue(field Field) (bool, string, error) {
 	var value string
 
-	switch field.tp {
+	switch field.Type {
 	case stringType:
-		value = field.string
+		value = field.String
 	case intType:
-		value = strconv.FormatInt(field.int64, 10)
+		value = strconv.FormatInt(field.Int64, 10)
 	case int8Type:
-		value = strconv.FormatInt(field.int64, 10)
+		value = strconv.FormatInt(field.Int64, 10)
 	case int16Type:
-		value = strconv.FormatInt(field.int64, 10)
+		value = strconv.FormatInt(field.Int64, 10)
 	case int32Type:
-		value = strconv.FormatInt(field.int64, 10)
+		value = strconv.FormatInt(field.Int64, 10)
 	case int64Type:
-		value = strconv.FormatInt(field.int64, 10)
+		value = strconv.FormatInt(field.Int64, 10)
 	case boolType:
 		bv := false
-		if field.int64 == 1 {
+		if field.Int64 == 1 {
 			bv = true
 		}
 		value = strconv.FormatBool(bv)
 	case float32Type:
-		value = strconv.FormatFloat(field.float64, 'E', -1, 32)
+		value = strconv.FormatFloat(field.Float64, 'E', -1, 32)
 	case float64Type:
-		value = strconv.FormatFloat(field.float64, 'E', -1, 64)
+		value = strconv.FormatFloat(field.Float64, 'E', -1, 64)
 	case timeType:
-		tm := field.value.(time.Time)
+		tm := field.Value.(time.Time)
 		value = tm.Format(time.RFC3339Nano)
 	case jsonType:
-		bts, err := json.Marshal(field.value)
+		bts, err := json.Marshal(field.Value)
 		if err != nil {
 			return false, "", err
 		}
 		value = string(bts)
 	case interfaceType:
-		value = fmt.Sprint(field.value)
+		value = fmt.Sprint(field.Value)
 	case errorType:
-		if field.err == nil {
+		if field.Err == nil {
 			return false, "", nil
 		}
-		value = field.err.Error()
+		value = field.Err.Error()
 	default:
 		return false, "", errors.New("unknown field type")
 	}

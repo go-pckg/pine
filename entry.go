@@ -14,45 +14,45 @@ var entryPool = &sync.Pool{
 }
 
 type Entry struct {
-	logger  *Logger
-	level   Level
-	time    time.Time
-	message string
-	caller  *Caller
-	stack   errors.StackTrace
-	fields  []Field
+	Logger  *Logger
+	Level   Level
+	Time    time.Time
+	Message string
+	Caller  *Caller
+	Stack   errors.StackTrace
+	Fields  []Field
 }
 
 func (e *Entry) Debugf(msg string, args ...interface{}) {
-	e.logger.log(DebugLevel, msg, args, e.fields)
+	e.Logger.log(DebugLevel, msg, args, e.Fields)
 }
 
 func (e *Entry) Infof(msg string, args ...interface{}) {
-	e.logger.log(InfoLevel, msg, args, e.fields)
+	e.Logger.log(InfoLevel, msg, args, e.Fields)
 }
 
 func (e *Entry) Warnf(msg string, args ...interface{}) {
-	e.logger.log(WarnLevel, msg, args, e.fields)
+	e.Logger.log(WarnLevel, msg, args, e.Fields)
 }
 
 func (e *Entry) Errorf(msg string, args ...interface{}) {
-	e.logger.log(ErrorLevel, msg, args, e.fields)
+	e.Logger.log(ErrorLevel, msg, args, e.Fields)
 }
 
 func (e *Entry) Panicf(msg string, args ...interface{}) {
-	e.logger.log(PanicLevel, msg, args, e.fields)
+	e.Logger.log(PanicLevel, msg, args, e.Fields)
 }
 
 func (e *Entry) Fatalf(msg string, args ...interface{}) {
-	e.logger.log(FatalLevel, msg, args, e.fields)
+	e.Logger.log(FatalLevel, msg, args, e.Fields)
 	entryPool.Put(e)
 }
 
 func (e *Entry) logCaller(skipFrame int) {
 	_, file, line, ok := getCaller(skipFrame)
 	if !ok {
-		e.caller = nil
+		e.Caller = nil
 		return
 	}
-	e.caller = &Caller{File: shortFile(file), Line: line}
+	e.Caller = &Caller{File: shortFile(file), Line: line}
 }

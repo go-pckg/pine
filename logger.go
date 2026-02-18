@@ -134,7 +134,7 @@ func (l *Logger) With(fields ...Field) *Logger {
 	lg := l.clone()
 
 	for i := range fields {
-		lg.fields[fields[i].key] = fields[i]
+		lg.fields[fields[i].Key] = fields[i]
 	}
 
 	return lg
@@ -198,8 +198,8 @@ func (l *Logger) Fatalf(msg string, a ...interface{}) {
 
 func (l *Logger) WithFields(fields ...Field) *Entry {
 	e := l.newEntry()
-	e.fields = fields
-	e.logger = l
+	e.Fields = fields
+	e.Logger = l
 	return e
 }
 
@@ -222,18 +222,18 @@ func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields [
 					entryPool.Put(e)
 				}()
 
-				e.level = lvl
-				e.message = sprintf(template, fmtArgs)
-				e.logger = l
+				e.Level = lvl
+				e.Message = sprintf(template, fmtArgs)
+				e.Logger = l
 				e.logCaller(defaultFramesToSkip)
-				e.stack = nil
+				e.Stack = nil
 
 				for i := range fields {
-					if fields[i].tp == errorType && fields[i].err != nil {
+					if fields[i].Type == errorType && fields[i].Err != nil {
 						if l.shouldPrintTrace(lvl) {
-							stackTracer := getStackTracer(fields[i].err)
+							stackTracer := getStackTracer(fields[i].Err)
 							if stackTracer != nil {
-								e.stack = stackTracer.StackTrace()
+								e.Stack = stackTracer.StackTrace()
 							}
 						}
 					}
@@ -249,7 +249,7 @@ func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields [
 				for _, hook := range l.hooks {
 					if err := hook.Run(e, fields); err != nil {
 						if l.errOut != nil {
-							fmt.Fprintf(l.errOut, "%v hook error: %v\n", e.time, err)
+							fmt.Fprintf(l.errOut, "%v hook error: %v\n", e.Time, err)
 						}
 					}
 				}
@@ -257,7 +257,7 @@ func (l *Logger) log(lvl Level, template string, fmtArgs []interface{}, fields [
 
 			if err := l.handlers[i].write(e, fields); err != nil {
 				if l.errOut != nil {
-					fmt.Fprintf(l.errOut, "%v write error: %v\n", e.time, err)
+					fmt.Fprintf(l.errOut, "%v write error: %v\n", e.Time, err)
 				}
 			}
 		}
@@ -270,7 +270,7 @@ func (l *Logger) shouldPrintTrace(lvl Level) bool {
 
 func (l *Logger) newEntry() *Entry {
 	e := entryPool.Get().(*Entry)
-	e.time = l.clock.Now()
+	e.Time = l.clock.Now()
 	return e
 }
 
